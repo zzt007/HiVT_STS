@@ -2,6 +2,21 @@
 This branch *master* and repo contains the original HiVT code
 The branch *dev* contains the HiVT-STS, which STS means "SpatioTemporalSpectral" 
 
+# Add the Spectral info to the whole architecture
+## Modified in two places
+1\. Local_encoder
+```
+original output : local_embed
+changed : local_embed , traj_fourier_embed
+```
+
+2\. Decoder
+```
+original decoder input : local_embed , global_embed
+changed : traj_fourier_embed , local_embed , global_embed
+```
+
+## It's worth noting that the traj_fourier_embed, obtained by a MLP, which is not a long-term solution, fixed me!
 
 # HiVT: Hierarchical Vector Transformer for Multi-Agent Motion Prediction
 This repository contains the official implementation of [HiVT: Hierarchical Vector Transformer for Multi-Agent Motion Prediction](https://openaccess.thecvf.com/content/CVPR2022/papers/Zhou_HiVT_Hierarchical_Vector_Transformer_for_Multi-Agent_Motion_Prediction_CVPR_2022_paper.pdf) published in CVPR 2022.
