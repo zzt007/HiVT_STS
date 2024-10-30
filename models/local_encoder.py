@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Optional, Tuple
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -100,6 +100,37 @@ class LocalEncoder(nn.Module):
                 out[t] = self.aa_encoder(x=data.x[:, t], t=t, edge_index=edge_index, edge_attr=edge_attr,
                                          bos_mask=data['bos_mask'][:, t], rotate_mat=data['rotate_mat'])
             out = torch.stack(out)  # [T, N, D]
+            
+            # 计算新增的输出，241029
+            local_xy = [None] * self.historical_steps
+            for t in range(self.historical_steps):
+                local_xy[t] = data.x[:,t]
+            # list2tensor
+            local_xy = torch.stack(local_xy)
+            # tensor2numpy
+            local_xy_np = local_xy.cpu().numpy()
+            traj_fourier_np = np.fft.fft2(local_xy_np,axes=(-3,-1)) # 对xy坐标计算二维离散傅里叶变换。shape[20，N，2]
+            traj_fourier = torch.from_numpy(traj_fourier_np)
+
+            embed = SingleInputEmbedding(in_channel=2, out_channel=64)
+            embed4fourier = SingleInputEmbedding(in_channel=20,out_channel=6)
+            # 将fourier后的复数进行float化
+            real_part = traj_fourier.real[:,:,0]
+            imag_part = traj_fourier.imag[:,:,1]
+            real_part_float32 = real_part.to(torch.float32)
+            imag_part_float32 = imag_part.to(torch.float32)
+            # 合并
+            traj_fourier_float32 = torch.stack([real_part_float32, imag_part_float32], dim=-1)
+            
+            # 参考center_embed的shape
+            # center_embed = self.center_embed(x.view(self.historical_steps, x.shape[0] // self.historical_steps, -1))
+            # traj_fourier_embed = embed(traj_fourier_float32.view(self.historical_steps, traj_fourier_float32.shape[0] // self.historical_steps, -1))  # 手动输入了64，后面需要替换为embed_dim表示
+            traj_fourier_embed = embed(traj_fourier_float32)
+            traj_fourier_embed = traj_fourier_embed.permute(2,1,0)
+            traj_fourier_embed = embed4fourier(traj_fourier_embed)
+            traj_fourier_embed = traj_fourier_embed.permute(2,1,0)
+            
+            
         # 将A-A interaction的输出作为temporal_encoder的输入,经过temporal_encoder后输入到下方的A-L interaction中
         out = self.temporal_encoder(x=out, padding_mask=data['padding_mask'][:, : self.historical_steps])
         edge_index, edge_attr = self.drop_edge(data['lane_actor_index'], data['lane_actor_vectors'])
@@ -107,7 +138,7 @@ class LocalEncoder(nn.Module):
                               is_intersections=data['is_intersections'], turn_directions=data['turn_directions'],
                               traffic_controls=data['traffic_controls'], rotate_mat=data['rotate_mat'])
         # 至此,完成local_encoder的所有内容,得到的输出out准备进入global_encoder
-        return out
+        return out, traj_fourier_embed
 
 # AAEncoder类继承自MessagePassing,是图神经网络传递信息的基类,可参考:https://pytorch-geometric.readthedocs.io/en/latest/tutorial/create_gnn.html#the-messagepassing-base-class
 class AAEncoder(MessagePassing):

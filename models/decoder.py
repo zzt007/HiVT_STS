@@ -67,7 +67,8 @@ class GRUDecoder(nn.Module):
 
     def forward(self,
                 local_embed: torch.Tensor,
-                global_embed: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                global_embed: torch.Tensor,
+                ) -> Tuple[torch.Tensor, torch.Tensor]:
         pi = self.pi(torch.cat((local_embed.expand(self.num_modes, *local_embed.shape),
                                 global_embed), dim=-1)).squeeze(-1).t()
         global_embed = global_embed.reshape(-1, self.input_size)  # [F x N, D]
@@ -103,7 +104,7 @@ class MLPDecoder(nn.Module):
 
         # 用于聚合local和global的embedding
         self.aggr_embed = nn.Sequential(
-            nn.Linear(self.input_size + self.hidden_size, self.hidden_size),
+            nn.Linear(self.input_size + self.hidden_size + self.hidden_size, self.hidden_size),
             nn.LayerNorm(self.hidden_size),
             nn.ReLU(inplace=True))
         # 用于得到location
@@ -119,7 +120,7 @@ class MLPDecoder(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Linear(self.hidden_size, self.future_steps * 2))
         self.pi = nn.Sequential(
-            nn.Linear(self.hidden_size + self.input_size, self.hidden_size),
+            nn.Linear(self.hidden_size + self.input_size + self.hidden_size, self.hidden_size),
             nn.LayerNorm(self.hidden_size),
             nn.ReLU(inplace=True),
             nn.Linear(self.hidden_size, self.hidden_size),
@@ -130,10 +131,14 @@ class MLPDecoder(nn.Module):
 
     def forward(self,
                 local_embed: torch.Tensor,
-                global_embed: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                global_embed: torch.Tensor,
+                traj_fourier_embed: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         pi = self.pi(torch.cat((local_embed.expand(self.num_modes, *local_embed.shape),
+                                traj_fourier_embed.to('cuda'),
                                 global_embed), dim=-1)).squeeze(-1).t()
-        out = self.aggr_embed(torch.cat((global_embed, local_embed.expand(self.num_modes, *local_embed.shape)), dim=-1))
+        out = self.aggr_embed(torch.cat((global_embed, 
+                                         local_embed.expand(self.num_modes, *local_embed.shape),
+                                         traj_fourier_embed.to('cuda')), dim=-1))
         loc = self.loc(out).view(self.num_modes, -1, self.future_steps, 2)  # [F, N, H, 2]
         if self.uncertain:
             scale = F.elu_(self.scale(out), alpha=1.0).view(self.num_modes, -1, self.future_steps, 2) + 1.0

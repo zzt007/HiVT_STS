@@ -108,11 +108,11 @@ class HiVT(pl.LightningModule):
         else:
             data['rotate_mat'] = None
 
-        local_embed = self.local_encoder(data=data)
+        local_embed, traj_fourier_embed = self.local_encoder(data=data)
         global_embed = self.global_interactor(data=data, local_embed=local_embed)
         # 在论文中，an MLP decoder receives local and global representation as inputs ,and outputs the location and its associated uncertainty，所以y_hat是location（带不带uncertainty取决于设置）
         # pi代表的是  the mixing coefficients of the mixture model for each agent(体现多模态)，个人理解是pi代表了各车可能行驶的方向的概率
-        y_hat, pi = self.decoder(local_embed=local_embed, global_embed=global_embed)
+        y_hat, pi = self.decoder(local_embed=local_embed, global_embed=global_embed,traj_fourier_embed = traj_fourier_embed)
         return y_hat, pi
 
     def training_step(self, data, batch_idx):
