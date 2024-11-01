@@ -2,7 +2,21 @@
 This branch *master* and repo contains the original HiVT code
 The branch *dev* contains the HiVT-STS, which STS means "SpatioTemporalSpectral" 
 
-# Add the Spectral info to the whole architecture
+# 241101-Add the Spectral info into the process of training, the STS would be concat before sent into the network
+1\. DataPreprocess
+```
+origin data shape(before embedding) : [batch_size, obs_len, 2]
+add the spectral info(use DFT) : [batch_size, obs_len, 2+2]
+sent into the embedding : [batch_size, obs_len, embed_dim]
+```
+
+2\. LocalEncoder
+```
+pass
+```
+
+
+# 241029-Add the Spectral info to the whole architecture
 ## Modified in two places
 1\. Local_encoder
 ```
@@ -15,6 +29,8 @@ changed : local_embed , traj_fourier_embed
 original decoder input : local_embed , global_embed
 changed : traj_fourier_embed , local_embed , global_embed
 ```
+
+
 
 ## It's worth noting that the traj_fourier_embed, obtained by a MLP, which is not a long-term solution, fixed me!
 
